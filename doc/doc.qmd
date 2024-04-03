@@ -9,6 +9,8 @@ format:
       - cosmo
     css:
       - doc/jpfont.css
+    custom-filter: "hateblo-filter.py"
+    code-fold: true
 pdf-engine: lualatex
 crossref:
   fig-title: 図
@@ -32,6 +34,9 @@ execute:
 ## 要約
 
 分類モデルとして見たロジスティック回帰の分類境界線は、『[誤った図解から学ぶロジスティック回帰の性質](https://ill-identified.hatenablog.com/entry/2018/05/23/233955)』で指摘したように曲線ではない. 当然シグモイド曲線でもない. そこで, ロジスティック回帰に代わってシグモイド曲線のようなS字状の分類境界線を描く分類モデルを考案し, 実装した. 現時点では R のパッケージである **hotpot** として配布している. パッケージ名は分類境界が火鍋に似ているためである. 現時点では改良の余地は大いにある.
+
+https://github.com/Gedevan-Aleksizde/hotpot
+
 
 ## 先行研究
 
@@ -59,7 +64,17 @@ execute:
 
 ## デモ
 
-依存パッケージは **stats** のみであるが, **tidyverse**, **ggplot2**, そして **ggthemes** を使った.
+依存パッケージは **stats** のみであるが, **tidyverse**, **ggplot2**, そして **ggthemes** を使った. この投稿の原稿であるQMDファイルと, 実行環境の renv.lock ファイルは冒頭のGitHubリポジトリにある.
+
+```{r}
+#| label: renv
+#| eval: false
+#| echo: false
+
+# 動作を再現できないときはこのチャンクを実行する
+install.packages("renv")
+renv::restore()
+```
 
 ```{r}
 #| label: setup
@@ -81,6 +96,8 @@ $$
 
 ```{r}
 #| label: make-data
+#| echo: false
+#| code-fold: true
 
 set.seed(42)
 X <- matrix(runif(1000, min = -1, max = 1), ncol = 2)
@@ -102,8 +119,6 @@ d_60 <- tibble(r = runif(n = 1000, 0, 1)) %>%
 d_60[, 1:2] <- hotpot:::rotate_X(as.matrix(d_60[, 1:2]), theta = pi/3)
 ```
 
-しかし **hotpot** は回転に対応している
-
 
 ```{r}
 #| label: plot-data
@@ -111,9 +126,11 @@ d_60[, 1:2] <- hotpot:::rotate_X(as.matrix(d_60[, 1:2]), theta = pi/3)
 bind_rows(d_random %>% mutate(data = "random"), d_60 %>% mutate(data = "60 degrees")) %>%
   mutate(data = factor(data, labels = c("random", "60 degrees"))) %>%
   ggplot(aes(x = x.1, y = x.2, color = y, group = data)) + geom_point() +
-  facet_wrap(~data)
+  facet_wrap(~data) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 ```
 
+しかし **hotpot** は回転に対応しているため, 適切に分類できる. これが乱数生成したデータに対する当てはまりである. 点ごとに正答しているかどうかは点の形状で表している.
 
 ```{r}
 #| label: fit
@@ -130,8 +147,6 @@ d_result <- map2_dfr(
 )
 ```
 
-分類結果はこのようになる. 点ごとに正答しているかどうかは点の形状で表している.
-
 ```{r}
 #| label: plot-fitted-scatter
 
@@ -140,13 +155,16 @@ d_result %>%
   geom_point() +
   scale_shape_manual(
     values = c(`FALSE` = 4, `TRUE` = 20)) +
-  facet_wrap(~data)
+  facet_wrap(~data) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 ```
 
 境界を表すと以下のようになる. 代数的に表示するのがめんどくさいのでグリッドで近似している. 60度回転させたケースでもうまく当てはまっていると分かる.
 
 ```{r}
 #| label: to-visualize
+#| echo: false
+#| code-fold: true
 
 d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
 d_grid <- map_dfr(
@@ -175,7 +193,8 @@ d_grid %>%
   scale_color_viridis_d() +
   scale_fill_viridis_d() +
   labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
-  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
+  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20)) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 ```
 
 なんか動いてる実感がないと納得しない人向けのGIFアニメ画像が以下になる.
@@ -183,7 +202,8 @@ d_grid %>%
 ```{r}
 #| label: anime
 #| animation-hook: gifski
-  
+#| echo: false
+
 fit_ <- fit[["deg60"]]
 
 for(phi in seq(0, fit_$parameters$theta, length = 5)){
@@ -273,7 +293,7 @@ d_grid %>%
 
 ## 参考文献
 
-* 『[誤った図解から学ぶロジスティック回帰の性質](https://ill-identified.hatenablog.com/entry/2018/05/23/233955)』https://ill-identified.hatenablog.com/entry/2018/05/23/233955
+* 『[誤った図解から学ぶロジスティック回帰の性質](https://ill-identified.hatenablog.com/entry/2018/05/23/233955)』
 * 『[非線形分類アルゴリズム「HotPot」を新開発しました!](https://ill-identified.hatenablog.com/entry/2019/04/01/000000)』
 
 
