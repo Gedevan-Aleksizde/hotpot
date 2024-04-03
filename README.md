@@ -1,6 +1,6 @@
 # hotpot
 
-![hotpot demo](https://github.com:Gedevan-Aleksizde/hotpot/blob/master/doc/anime.gif)
+![hotpot demo](https://github.com/Gedevan-Aleksizde/hotpot/blob/master/doc/anime.gif)
 
 
 ```r
