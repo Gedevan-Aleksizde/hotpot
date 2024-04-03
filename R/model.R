@@ -52,7 +52,8 @@ hotpot <- function(
     convergence = r$convergence,
     count = r$count,
     X = X,
-    y = y)
+    y = y,
+    optim = r)
   class(params) <- "hotpot"
   return(params)
 }
