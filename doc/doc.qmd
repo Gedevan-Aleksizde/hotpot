@@ -64,7 +64,7 @@ https://github.com/Gedevan-Aleksizde/hotpot
 
 ## デモ
 
-依存パッケージは **stats** のみであるが, 以降のデモでは **tidyverse**, **ggplot2**, そして **ggthemes** を使った. GitHubには, 完全なコードが掲載された, この投稿の原稿であるQMDファイルと, 実行環境の再現用ファイルがある.
+依存パッケージは **stats** のみであるが, 以降のデモでは **tidyverse**, **ggplot2**, そして **ggthemes** も使っている. GitHubには, 完全なコードが掲載された, この投稿の原稿であるQMDファイルと, 実行環境の再現用ファイルがある.
 
 ```{r}
 #| label: renv
@@ -82,7 +82,7 @@ renv::restore()
 require(tidyverse)
 require(ggthemes)
 require(hotpot)
-theme_set(theme_classic(base_family = "Noto Sans CJK JP"))
+theme_set(theme_gray(base_family = "Noto Sans CJK JP"))
 boundary_logis <- function(x) hotpot::boundary_sigmoid(x, b = .2)
 ```
 
@@ -127,6 +127,7 @@ bind_rows(d_random %>% mutate(data = "random"), d_60 %>% mutate(data = "60 degre
   mutate(data = factor(data, labels = c("random", "60 degrees"))) %>%
   ggplot(aes(x = x.1, y = x.2, color = y, group = data)) + geom_point() +
   facet_wrap(~data) +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 ```
 
@@ -156,6 +157,7 @@ d_result %>%
   scale_shape_manual(
     values = c(`FALSE` = 4, `TRUE` = 20)) +
   facet_wrap(~data) +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 ```
 
@@ -190,8 +192,8 @@ d_grid %>%
              data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
   facet_wrap(~data) +
-  scale_color_viridis_d() +
-  scale_fill_viridis_d() +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
+  scale_fill_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
   labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
   scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20)) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
@@ -221,8 +223,8 @@ for(phi in seq(0, fit_$parameters$theta, length = 5)){
              data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
   facet_wrap(~data) +
-  scale_color_viridis_d() +
-  scale_fill_viridis_d() +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
+  scale_fill_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
   labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
   scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
   print(g)
@@ -281,8 +283,8 @@ d_grid %>%
              data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
   coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
   facet_wrap(~data) +
-  scale_color_viridis_d() +
-  scale_fill_viridis_d() +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
+  scale_fill_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
   labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
   scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
 ```
