@@ -1,0 +1,280 @@
+---
+title: "今度こそ火鍋型分類機械学習モデルhotpotパッケージを実装した"
+format:
+  html:
+    toc-title: 目次
+    self-contained: false
+    mainfont: "Hiragino Sans"
+    tmeme:
+      - cosmo
+    css:
+      - doc/jpfont.css
+pdf-engine: lualatex
+crossref:
+  fig-title: 図
+  tbl-title: 表
+  title-delim: ":"
+  fig-prefix: 図
+  tbl-prefix: 表
+  eq-prefix: 式
+  sec-prefix: セクション
+  ref-hyperlink: true
+biblio-title: 参考文献
+execute:
+  message: false
+  warning: false
+---
+
+## 概要
+
+2日遅れのエイプリルフール
+
+## 要約
+
+分類モデルとして見たロジスティック回帰の分類境界線は、『[誤った図解から学ぶロジスティック回帰の性質](https://ill-identified.hatenablog.com/entry/2018/05/23/233955)』で指摘したように曲線ではない. 当然シグモイド曲線でもない. そこで, ロジスティック回帰に代わってシグモイド曲線のようなS字状の分類境界線を描く分類モデルを考案し, 実装した. 現時点では R のパッケージである **hotpot** として配布している. パッケージ名は分類境界が火鍋に似ているためである. 現時点では改良の余地は大いにある.
+
+## 先行研究
+
+以前書いた『[非線形分類アルゴリズム「HotPot」を新開発しました!](https://ill-identified.hatenablog.com/entry/2019/04/01/000000)』はエイプリルフールなので嘘だった. S字曲線になるようなデータでしかS字状の分類境界が発生しない. 決定木で過剰適合しているだけだからである.
+
+つまり, どのようなデータに対しても火鍋のようなS字状の曲線になる分類モデルはまだ作られていない.
+
+次に, 火鍋の曲線の特定が必要である. 火鍋の形状には色々あり, 明確に決まっているようには見えない. 太極図になぞらえた形状であることは間違えないので, 太極図の曲線についても調べたが, 特定の曲線を使うことが決まっているわけでもない.
+
+
+## モデル
+
+最初はサポートベクターマシン(SVM)を拡張してできないか考えていたが, 超平面を曲面に拡張すると, 二次計画法で解けるという便利な性質が失われる. いわゆる非線形SVMはカーネル変換を使っているだけで, 超平面を変換するものではないので, 超平面の形状を固定するのは難しい.
+
+結局思いつかなかったので, 大幅に制約した.
+
+1. 2次元の特徴量空間と2値ラベルのデータにのみ適用できる
+1. 所与の曲線を分類境界とし, 正答率が最大化するように回転角パラメータを学習する
+1. スコアを出力する機能はない
+
+
+(2)の曲線のパラメータを増やすことはそこまで難しくないが, 数時間で作るのは大変なので省略した. 実装したパッケージでは, ユーザー定義の関数を曲線として指定でき, この関数は少なくとも特徴量空間上で連続である^[入力データを [-1,1]区間にスケールするオプションがあるため, スケール後の空間上で連続であれば動する.]ことが求められる. デフォルトでは, 位置とスケールを調整したシグモイド曲線が使われる.
+
+それから, 目的関数は間違いなく凹関数に限定されないのでニュートン法で最適解を求められる保証はない. グリッドサーチのほうがうまくいく可能性すらある.
+
+## デモ
+
+依存パッケージは **stats** のみであるが, **tidyverse**, **ggplot2**, そして **ggthemes** を使った.
+
+```{r}
+#| label: setup
+
+require(tidyverse)
+require(ggthemes)
+require(hotpot)
+theme_set(theme_classic(base_family = "Noto Sans CJK JP"))
+boundary_logis <- function(x) hotpot::boundary_sigmoid(x, b = .2)
+```
+
+動作確認用のデータを2種類用意する. 1つは完全にランダムであり, もう1つはシグモイド曲線で分離できるが, 曲線が60度回転しているため, 通常のシグモイド曲線,
+
+$$
+x_2 = f(x_1) = \frac1{1 + \exp(-x)}
+$$
+
+のスケールや位置を調整しただけではうまく当てはまらない.
+
+```{r}
+#| label: make-data
+
+set.seed(42)
+X <- matrix(runif(1000, min = -1, max = 1), ncol = 2)
+
+d_random <- as_tibble(X, .name_repair = "unique") %>% set_names(c("x.1", "x.2")) %>%
+  mutate(y = sample(c(F, T), replace = T, size = n()))
+
+d_60 <- tibble(r = runif(n = 1000, 0, 1)) %>%
+  mutate(
+    theta = runif(n = n(), -1, 1)
+  ) %>% 
+  mutate(
+    x.1 =  r * cos(theta * pi), x.2 = r * sin(theta * pi)
+  ) %>%
+  dplyr::select(-r, -theta) %>%
+  mutate(
+    y = boundary_logis(x.1) > x.2
+    )
+d_60[, 1:2] <- hotpot:::rotate_X(as.matrix(d_60[, 1:2]), theta = pi/3)
+```
+
+しかし **hotpot** は回転に対応している
+
+
+```{r}
+#| label: plot-data
+
+bind_rows(d_random %>% mutate(data = "random"), d_60 %>% mutate(data = "60 degrees")) %>%
+  mutate(data = factor(data, labels = c("random", "60 degrees"))) %>%
+  ggplot(aes(x = x.1, y = x.2, color = y, group = data)) + geom_point() +
+  facet_wrap(~data)
+```
+
+
+```{r}
+#| label: fit
+
+fit <- list(random = d_random, deg60 = d_60) %>%
+  map(
+    ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_logis)
+  )
+
+d_result <- map2_dfr(
+  list(mutate(d_random, data = "random"), mutate(d_60, data = "deg60")),
+  fit,
+  ~mutate(.x, p = predict(.y))
+)
+```
+
+分類結果はこのようになる. 点ごとに正答しているかどうかは点の形状で表している.
+
+```{r}
+#| label: plot-fitted-scatter
+
+d_result %>%
+  ggplot(aes(x = x.1, y = x.2, color = y, shape = y == p, group = data)) +
+  geom_point() +
+  scale_shape_manual(
+    values = c(`FALSE` = 4, `TRUE` = 20)) +
+  facet_wrap(~data)
+```
+
+境界を表すと以下のようになる. 代数的に表示するのがめんどくさいのでグリッドで近似している. 60度回転させたケースでもうまく当てはまっていると分かる.
+
+```{r}
+#| label: to-visualize
+
+d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
+d_grid <- map_dfr(
+  c("random", "deg60"),
+  ~mutate(d_grid, data = .x, p = predict(fit[[.x]], d_grid))
+)
+
+d_score <- d_result %>% group_by(data) %>% summarise(accuracy = mean(y == p), .groups = "drop")
+
+d_grid <- inner_join(d_grid, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
+d_result <- inner_join(d_result, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
+```
+
+```{r}
+#| label: plot-compare
+
+d_grid %>%
+  ggplot(aes(x = x.1, y = x.2, fill = p)) +
+  geom_tile(alpha = .2) + 
+  geom_point(aes(x = x.1, y = x.2, shape = accuracy, color = y),
+             data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
+  facet_wrap(~data) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
+  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
+```
+
+なんか動いてる実感がないと納得しない人向けのGIFアニメ画像が以下になる.
+
+```{r}
+#| label: anime
+#| animation-hook: gifski
+  
+fit_ <- fit[["deg60"]]
+
+for(phi in seq(0, fit_$parameters$theta, length = 5)){
+  fit_$parameters$theta <- phi
+  d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
+  accuracy <- mean(fit_$y == predict(fit_))
+  d_result <- d_60 %>% mutate(p = predict(fit_)) %>%
+    mutate(data = paste0("acc=", accuracy))
+  d_grid <- mutate(d_grid, p = predict(fit_, d_grid)) %>%
+    mutate(data = paste0("acc=", accuracy))
+  g <- d_grid %>%
+  ggplot(aes(x = x.1, y = x.2, fill = p)) +
+  geom_tile(alpha = .2) + 
+  geom_point(aes(x = x.1, y = x.2, shape = accuracy, color = y),
+             data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
+  facet_wrap(~data) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
+  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
+  print(g)
+}
+```
+
+
+もう1つ曲線を用意した. 半円を互い違いにつなげただけのものだ.
+
+$$
+x_2 = f(x_1) = \begin{cases}\sqrt{r^2 - (x_1 + r)^2} & \text{if } x_1 < 0\\ -\sqrt{r^2-(x_1-r)^2} & \text{if } x_1 \geq 0\end{cases}
+$$
+
+
+```{r}
+#| label: fit-halfmoon
+#| echo: false
+
+boundary_circle <- function(x) hotpot::boundary_half_circle(x, .r = 2)
+
+fit_2 <- list(random = d_random, deg60 = d_60) %>%
+  map(
+    ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_circle)
+  )
+
+d_result <- map2_dfr(
+  list(mutate(d_random, data = "random"), mutate(d_60, data = "deg60")),
+  fit_2,
+  ~mutate(.x, p = predict(.y))
+)
+
+d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
+d_grid <- map_dfr(
+  c("random", "deg60"),
+  ~mutate(d_grid, data = .x, p = predict(fit[[.x]], d_grid))
+)
+
+d_score <- d_result %>% group_by(data) %>% summarise(accuracy = mean(y == p), .groups = "drop")
+
+d_grid <- inner_join(d_grid, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
+d_result <- inner_join(d_result, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
+```
+
+このように, **hotpot** は入力データに関係なく何が何でもS字状の分類境界を作る.
+
+```{r}
+#| label: plot-halfmoon
+#| echo: false
+
+d_grid %>%
+  ggplot(aes(x = x.1, y = x.2, fill = p)) +
+  geom_tile(alpha = .2) + 
+  geom_point(aes(x = x.1, y = x.2, shape = accuracy, color = y),
+             data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
+  coord_fixed(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
+  facet_wrap(~data) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
+  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
+```
+
+## 実用的なのか?
+
+他に使いみちがあるとは思えない. 誰も参入しないブルーオーシャンなのでアルゴリズムや実装の改良案は出し放題である.
+
+## 参考文献
+
+* 『[誤った図解から学ぶロジスティック回帰の性質](https://ill-identified.hatenablog.com/entry/2018/05/23/233955)』https://ill-identified.hatenablog.com/entry/2018/05/23/233955
+* 『[非線形分類アルゴリズム「HotPot」を新開発しました!](https://ill-identified.hatenablog.com/entry/2019/04/01/000000)』
+
+
+
