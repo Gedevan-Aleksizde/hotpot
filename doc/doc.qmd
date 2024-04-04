@@ -12,7 +12,11 @@ format:
     custom-filter: "hateblo-filter.py"
     code-fold: true
   markdown_github: 
-    toc-title: 目次
+    wrap: none
+    html-math-method: katex
+    toc: true
+    variant:
+      - +tex_math_dollars
 pdf-engine: lualatex
 crossref:
   fig-title: 図
@@ -39,6 +43,7 @@ execute:
 
 https://github.com/Gedevan-Aleksizde/hotpot
 
+![ロジスティック回帰の図としては間違っている模式図](wrong.png)
 
 ## 先行研究
 
@@ -63,7 +68,7 @@ https://github.com/Gedevan-Aleksizde/hotpot
 
 ## デモ
 
-依存パッケージは **stats** のみであるが, 以降のデモでは **tidyverse**, **ggplot2**, そして **ggthemes** も使っている. GitHubには, 完全なコードが掲載された, この投稿の原稿であるQMDファイルと, 実行環境の再現用ファイルがある.
+**hotpot** の依存パッケージは **stats** のみであるが, 以降のデモでは **tidyverse**, **ggplot2**, そして **ggthemes** も使っている. GitHubには, 完全なコードが掲載された, この投稿の原稿であるQMDファイルと, 実行環境の再現用ファイルがある.
 
 ```{r}
 #| label: renv
@@ -77,6 +82,7 @@ renv::restore()
 
 ```{r}
 #| label: setup
+#| code-summary: setup
 
 require(tidyverse)
 require(ggthemes)
@@ -88,7 +94,7 @@ boundary_logis <- function(x) hotpot::boundary_sigmoid(x, b = .2)
 動作確認用のデータを2種類用意する. 1つは完全にランダムであり, もう1つはシグモイド曲線で分離できるが, 曲線が60度回転しているため, 通常のシグモイド曲線,
 
 $$
-x_2 = f(x_1) = \frac1{1 + \exp(-x)}
+x_2 = f(x_1) = \frac1{1 + \exp(-x)} \label{eq:logistic}\tag{1}
 $$
 
 のスケールや位置を調整しただけではうまく当てはまらない.
@@ -97,6 +103,7 @@ $$
 #| label: make-data
 #| echo: false
 #| code-fold: true
+#| code-summary: generating the test data
 
 set.seed(42)
 X <- matrix(runif(1000, min = -1, max = 1), ncol = 2)
@@ -121,6 +128,8 @@ d_60[, 1:2] <- hotpot:::rotate_X(as.matrix(d_60[, 1:2]), theta = pi/3)
 
 ```{r}
 #| label: plot-data
+#| code-summary: plot the generated data
+#| fig-cap: 生成されたデータの散布図
 
 bind_rows(d_random %>% mutate(data = "random"), d_60 %>% mutate(data = "60 degrees")) %>%
   mutate(data = factor(data, labels = c("random", "60 degrees"))) %>%
@@ -137,6 +146,7 @@ bind_rows(d_random %>% mutate(data = "random"), d_60 %>% mutate(data = "60 degre
 
 ```{r}
 #| eval: false
+#| code-summary: the snyax
 require(hotpot)
 fit <- hopot(X, y)
 predict(fit)
@@ -149,6 +159,7 @@ predict(fit)
 
 ```{r}
 #| label: fit
+#| code-summary: create the result dataframe
 
 fit <- list(random = d_random, deg60 = d_60) %>%
   map(
@@ -164,6 +175,8 @@ d_result <- map2_dfr(
 
 ```{r}
 #| label: plot-fitted-scatter
+#| code-summary: visualize the prediction
+#| fig-cap: hotpotによる予測分類
 
 d_result %>%
   ggplot(aes(x = x.1, y = x.2, color = y, shape = y == p, group = data)) +
@@ -181,6 +194,7 @@ d_result %>%
 #| label: to-visualize
 #| echo: false
 #| code-fold: true
+#| code-summary: create a grid data to visualize the classification boundary
 
 d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
 d_grid <- map_dfr(
@@ -198,6 +212,8 @@ d_result <- inner_join(d_result, d_score, by ="data") %>%
 
 ```{r}
 #| label: plot-compare
+#| code-summary: visualize the classification boundary
+#| fig-cap: 分類境界の視覚化
 
 d_grid %>%
   ggplot(aes(x = x.1, y = x.2, fill = p)) +
@@ -219,6 +235,8 @@ d_grid %>%
 #| label: anime
 #| animation-hook: gifski
 #| echo: false
+#| code-summary: animation
+#| fig-cap: 収束してるっぽいアニメーション
 
 fit_ <- fit[["deg60"]]
 
@@ -249,10 +267,13 @@ for(phi in seq(0, fit_$parameters$theta, length = 5)){
 もう1つ曲線を用意した. 半円を互い違いにつなげただけのものだ.
 
 $$
-x_2 = f(x_1) = \begin{cases}\sqrt{r^2 - (x_1 + r/2)^2} & \text{if } x_1 < 0\\ -\sqrt{r^2-(x_1-r/2)^2} & \text{if } x_1 \geq 0\end{cases}
+x_2 = f(x_1) = \begin{cases}\sqrt{r^2 - (x_1 + r/2)^2} & \text{if } x_1 < 0\\ -\sqrt{r^2-(x_1-r/2)^2} & \text{if } x_1 \geq 0\end{cases} \label{eq:circles}\tag{2}
 $$
 
 ```{r}
+#| label: half-circle-curve
+#| code-summary: draw half circles
+#| fig-cap: 2つの半円を組み合わせた曲線
 boundary_circle <- function(x) hotpot::boundary_half_circle(x)
 
 ggplot(tibble(x.1 = c(-2, 2)), aes(x = x.1)) +
@@ -264,6 +285,7 @@ ggplot(tibble(x.1 = c(-2, 2)), aes(x = x.1)) +
 ```{r}
 #| label: fit-halfmoon
 #| echo: false
+#| code-summary: fit with half-circle function
 fit_2 <- list(random = d_random, deg60 = d_60) %>%
   map(
     ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_circle)
@@ -294,6 +316,8 @@ d_result <- inner_join(d_result, d_score, by ="data") %>%
 ```{r}
 #| label: plot-halfmoon
 #| echo: false
+#| code-summary: visualize the boundary by the half-circle function
+#| fig-cap: 半円を組み合わせた境界線を当てはめた結果
 
 d_grid %>%
   filter(!is.na(p)) %>%
@@ -309,9 +333,12 @@ d_grid %>%
   scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
 ```
 
-境界線に使用できる関数は, 全単射かつ $X_1$ 上で連続な $f:X_1\to X_2$ であればなんでもよい. 加えて, できれば原点で対称な形状であるとよい. プログラミング的に言えば, x軸座標を表す numeric 型のベクトルに対応する, 同じ長さのY軸座標の値のベクトルを返せる関数ならばなんでもよい. そのため, S字状でなくても良い. 例えばこういう関数でもよい.
+境界線に使用できる関数は, 全単射かつ $X_1$ 上で連続な $f:X_1\mapsto X_2$ であればなんでもよい. 加えて, できれば原点で対称な形状であるとよい. プログラミング的に言えば, x軸座標を表す numeric 型のベクトルに対応する, 同じ長さのY軸座標の値のベクトルを返せる関数ならばなんでもよい. そのため, S字状でなくても良い. 例えばこういう関数でもよい.
 
 ```{r}
+#| label: donald
+#| code-summary: draw a irregular hotpot boundary
+#| fig-cap: 変則的だが条件を満たす境界線の例
 boundary_m <- function(x){
   - 2 * (abs(x/2)-1/3)^2
 }
@@ -324,6 +351,8 @@ ggplot(tibble(x1 = c(-2, 2)), aes(x = x1)) +
 ```{r}
 #| label: plot-irregular
 #| echo: false
+#| code-summary: visualize the irregular hotpot boundary
+#| fig-cap: 変則的な境界関数を当てはめた結果
 fit_3 <- list(random = d_random, deg60 = d_60) %>%
   map(
     ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_m)
