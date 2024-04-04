@@ -142,7 +142,7 @@ fit <- hopot(X, y)
 predict(fit)
 ```
 
-さらに, 別の特徴量 `X_new` に対してラベルの予測を出力するなら, `predict(fit, X_new)` と書くだけである. 境界曲線は, デフォルトではロジスティックシグモイド関数が使われる. 実関数であれば `boundary_function` 引数に指定して, 境界線の関数を変更できる.
+さらに, 別の特徴量 `X_new` に対してラベルの予測を出力するなら, `predict(fit, X_new)` と書くだけである. 境界曲線は, デフォルトではロジスティックシグモイド関数が使われる. 全単射の実関数であれば `boundary_function` 引数に指定して, 境界線の関数を変更できる.
 
 
 これが乱数生成したデータに対する当てはまりである. 点ごとに正答しているかどうかは点の形状で表している.
@@ -249,16 +249,21 @@ for(phi in seq(0, fit_$parameters$theta, length = 5)){
 もう1つ曲線を用意した. 半円を互い違いにつなげただけのものだ.
 
 $$
-x_2 = f(x_1) = \begin{cases}\sqrt{r^2 - (x_1 + r)^2} & \text{if } x_1 < 0\\ -\sqrt{r^2-(x_1-r)^2} & \text{if } x_1 \geq 0\end{cases}
+x_2 = f(x_1) = \begin{cases}\sqrt{r^2 - (x_1 + r/2)^2} & \text{if } x_1 < 0\\ -\sqrt{r^2-(x_1-r/2)^2} & \text{if } x_1 \geq 0\end{cases}
 $$
 
+```{r}
+boundary_circle <- function(x) hotpot::boundary_half_circle(x)
+
+ggplot(tibble(x.1 = c(-2, 2)), aes(x = x.1)) +
+  stat_function(fun = boundary_half_circle) +
+  labs(y = "x.2") +
+  coord_equal(ylim = c(-2, 2))
+```
 
 ```{r}
 #| label: fit-halfmoon
 #| echo: false
-
-boundary_circle <- function(x) hotpot::boundary_half_circle(x, .r = 2)
-
 fit_2 <- list(random = d_random, deg60 = d_60) %>%
   map(
     ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_circle)
@@ -273,7 +278,7 @@ d_result <- map2_dfr(
 d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
 d_grid <- map_dfr(
   c("random", "deg60"),
-  ~mutate(d_grid, data = .x, p = predict(fit[[.x]], d_grid))
+  ~mutate(d_grid, data = .x, p = predict(fit_2[[.x]], d_grid))
 )
 
 d_score <- d_result %>% group_by(data) %>% summarise(accuracy = mean(y == p), .groups = "drop")
@@ -284,11 +289,64 @@ d_result <- inner_join(d_result, d_score, by ="data") %>%
   mutate(data = paste0(data, ": acc=", accuracy))
 ```
 
-このように, **hotpot** は入力データに関係なく何が何でもS字状の分類境界を作る.
+このように, **hotpot** は入力データに関係なく何が何でもS字状の分類境界を作る. なお, 回転の計算の実装が手抜きなので定義域に制約があると角部分の境界が計算できない.
 
 ```{r}
 #| label: plot-halfmoon
 #| echo: false
+
+d_grid %>%
+  filter(!is.na(p)) %>%
+  ggplot(aes(x = x.1, y = x.2, fill = p)) +
+  geom_tile(alpha = .2) + 
+  geom_point(aes(x = x.1, y = x.2, shape = accuracy, color = y),
+             data = d_result %>% mutate(accuracy = y == p), inherit.aes = F) +
+  coord_equal(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5)) +
+  facet_wrap(~data) +
+  scale_color_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
+  scale_fill_manual(values = c(`FALSE` = "gray100", `TRUE` = "red3")) +
+  labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
+  scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
+```
+
+境界線に使用できる関数は, 全単射かつ $X_1$ 上で連続な $f:X_1\to X_2$ であればなんでもよい. 加えて, できれば原点で対称な形状であるとよい. プログラミング的に言えば, x軸座標を表す numeric 型のベクトルに対応する, 同じ長さのY軸座標の値のベクトルを返せる関数ならばなんでもよい. そのため, S字状でなくても良い. 例えばこういう関数でもよい.
+
+```{r}
+boundary_m <- function(x){
+  - 2 * (abs(x/2)-1/3)^2
+}
+ggplot(tibble(x1 = c(-2, 2)), aes(x = x1)) +
+  stat_function(fun = boundary_m) +
+  coord_equal(ylim = c(-2, 2)) +
+  labs(y = "x2")
+```
+
+```{r}
+#| label: plot-irregular
+#| echo: false
+fit_3 <- list(random = d_random, deg60 = d_60) %>%
+  map(
+    ~hotpot(X = as.matrix(.x[, 1:2]), y = .x$y, boundary_function = boundary_m)
+  )
+
+d_result <- map2_dfr(
+  list(mutate(d_random, data = "random"), mutate(d_60, data = "deg60")),
+  fit_3,
+  ~mutate(.x, p = predict(.y))
+)
+
+d_grid <- expand_grid(x.1 = seq(-4, 4, by = .1), x.2 = seq( -4, 4, by = .1))
+d_grid <- map_dfr(
+  c("random", "deg60"),
+  ~mutate(d_grid, data = .x, p = predict(fit_3[[.x]], d_grid))
+)
+
+d_score <- d_result %>% group_by(data) %>% summarise(accuracy = mean(y == p), .groups = "drop")
+
+d_grid <- inner_join(d_grid, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
+d_result <- inner_join(d_result, d_score, by ="data") %>%
+  mutate(data = paste0(data, ": acc=", accuracy))
 
 d_grid %>%
   ggplot(aes(x = x.1, y = x.2, fill = p)) +
@@ -302,6 +360,8 @@ d_grid %>%
   labs(color = "Label", fill = "Prediction", shape = "Accuracy") +
   scale_shape_manual(values = c(`FALSE` = 4, `TRUE` = 20))
 ```
+
+
 
 ## 実用的なのか?
 
