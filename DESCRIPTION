@@ -1,6 +1,6 @@
 Package: hotpot
 Title: April Fool in 2024
-Version: 0.0.0.9000
+Version: 0.0.1
 Authors@R: 
     person("Satoshi", "Katagiri", , "katagiri.stsh@gmail.com", role = c("aut", "cre"))
 Description: This pacakge provide a classification algorithm whih always learns S-shaped boundary like a Chinese hotpot.
